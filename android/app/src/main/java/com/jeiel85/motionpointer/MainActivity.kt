@@ -57,6 +57,7 @@ class MainActivity : Activity() {
     // UI 스레드 상태
     private var linkActive = false // 연결 시도부터 끊기까지
     private var connected = false
+    private var padHeld = false
     private var sensorRegistered = false
     private var devices: List<BluetoothDevice> = emptyList()
 
@@ -205,6 +206,8 @@ class MainActivity : Activity() {
             is LinkState.Connected -> {
                 connected = true
                 window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                // 연결되기 전부터 패드를 누르고 있었다면 손을 떼지 않아도 바로 움직이게 한다.
+                if (padHeld) registerSensor()
                 showStatus(state.message)
             }
             is LinkState.Disconnected -> disconnect(state.message)
@@ -255,6 +258,7 @@ class MainActivity : Activity() {
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     view.isPressed = true
+                    padHeld = true
                     pointer.post {
                         mapper.reset()
                         moving = true
@@ -263,6 +267,7 @@ class MainActivity : Activity() {
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     view.isPressed = false
+                    padHeld = false
                     unregisterSensor()
                     pointer.post { moving = false }
                 }
