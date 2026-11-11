@@ -53,9 +53,11 @@ internal sealed class PointerSession(IMouseOutput output, Func<bool> isEnabled)
                 var next = isEnabled() ? requested : (byte)(Buttons & requested);
                 if (next != Buttons)
                 {
-                    Clicks += System.Numerics.BitOperations.PopCount((uint)(next & ~Buttons));
+                    // 전달에 성공했을 때만 상태를 바꾼다. 실패하면 이전 상태가 남아 다음 프레임에서 다시 시도된다.
+                    var pressed = System.Numerics.BitOperations.PopCount((uint)(next & ~Buttons));
                     output.SetButtons(Buttons, next);
                     Buttons = next;
+                    Clicks += pressed;
                 }
 
                 break;
@@ -73,10 +75,10 @@ internal sealed class PointerSession(IMouseOutput output, Func<bool> isEnabled)
         {
             if (Buttons != 0)
             {
-                // 출력이 실패해도 상태는 "뗌"으로 둔다. 다음 BUTTONS 프레임이 다시 맞춘다.
-                var held = Buttons;
+                // 뗌 전달이 실패하면 눌린 상태를 그대로 둔다. 그래야 다음 BUTTONS(0) 프레임이나
+                // 연결 종료 시 ReleaseAll이 다시 시도해서, 윈도우에 버튼이 눌린 채 남지 않는다.
+                output.SetButtons(Buttons, 0);
                 Buttons = 0;
-                output.SetButtons(held, 0);
             }
         }
     }

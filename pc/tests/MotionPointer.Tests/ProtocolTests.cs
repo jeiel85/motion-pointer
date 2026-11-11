@@ -136,12 +136,23 @@ public class PointerSessionTests
     }
 }
 
-internal sealed class FailingMouse : IMouseOutput
+/// <summary>Fail이 켜져 있는 동안 버튼 전달이 실패하는 출력(관리자 권한 창이 입력을 막는 상황).</summary>
+internal sealed class SwitchableMouse : IMouseOutput
 {
+    public bool Fail { get; set; }
+    public List<string> Delivered { get; } = [];
+
     public void MoveBy(int dx, int dy) { }
 
-    public void SetButtons(byte previous, byte current) =>
-        throw new System.ComponentModel.Win32Exception(5, "blocked");
+    public void SetButtons(byte previous, byte current)
+    {
+        if (Fail)
+        {
+            throw new System.ComponentModel.Win32Exception(5, "blocked");
+        }
+
+        Delivered.Add($"buttons {previous}->{current}");
+    }
 
     public void Wheel(int notches) { }
 }
@@ -149,15 +160,45 @@ internal sealed class FailingMouse : IMouseOutput
 public class PointerSessionFailureTests
 {
     [Fact]
-    public void ReleaseAll_clears_state_even_when_output_fails()
+    public void Failed_press_is_not_recorded_or_counted()
     {
-        var session = new PointerSession(new FailingMouse(), () => true);
+        var mouse = new SwitchableMouse { Fail = true };
+        var session = new PointerSession(mouse, () => true);
         Assert.Throws<System.ComponentModel.Win32Exception>(() => session.Apply(new PointerFrame.Buttons(1)));
-        Assert.Equal(0, session.Buttons); // 누름 전달이 실패했으면 눌린 것으로 기록하지 않는다
+        Assert.Equal(0, session.Buttons);
+        Assert.Equal(0, session.Clicks);
+    }
 
-        var mouse = new RecordingMouse();
-        var held = new PointerSession(mouse, () => true);
-        held.Apply(new PointerFrame.Buttons(1));
-        Assert.Equal(1, held.Buttons);
+    [Fact]
+    public void Failed_release_is_retried_by_next_release_frame()
+    {
+        var mouse = new SwitchableMouse();
+        var session = new PointerSession(mouse, () => true);
+        session.Apply(new PointerFrame.Buttons(PointerProtocol.ButtonLeft));
+
+        mouse.Fail = true; // 일시정지하며 떼려는 순간 입력이 막힘
+        Assert.Throws<System.ComponentModel.Win32Exception>(session.ReleaseAll);
+        Assert.Equal(PointerProtocol.ButtonLeft, session.Buttons); // 아직 눌린 것으로 기억
+
+        mouse.Fail = false; // 입력이 다시 가능해진 뒤 폰에서 버튼을 뗌
+        session.Apply(new PointerFrame.Buttons(0));
+        Assert.Equal(0, session.Buttons);
+        Assert.Equal(["buttons 0->1", "buttons 1->0"], mouse.Delivered);
+    }
+
+    [Fact]
+    public void Failed_release_is_retried_on_disconnect()
+    {
+        var mouse = new SwitchableMouse();
+        var session = new PointerSession(mouse, () => true);
+        session.Apply(new PointerFrame.Buttons(PointerProtocol.ButtonRight));
+
+        mouse.Fail = true;
+        Assert.Throws<System.ComponentModel.Win32Exception>(session.ReleaseAll);
+        mouse.Fail = false;
+        session.ReleaseAll(); // 연결 종료 시 정리
+
+        Assert.Equal(0, session.Buttons);
+        Assert.Equal(["buttons 0->2", "buttons 2->0"], mouse.Delivered);
     }
 }
