@@ -44,6 +44,8 @@ cd android
 adb install -r app\build\outputs\apk\debug\app-debug.apk
 ```
 
+릴리스 APK(`assembleRelease`)는 저장소 루트의 `.keystore/release-signing.properties`와 키스토어가 있어야 만들어집니다. 둘 다 git에서 제외되어 있고, 백업은 `G:\내 드라이브\모바일 앱 개발\Motion Pointer\릴리즈 키스토어\`에 있습니다. 서명 정보가 없으면 서명 안 된 APK를 만들지 않고 빌드가 실패합니다.
+
 이 PC에서는 Gradle 9.3.1의 Kotlin DSL 캐시가 설정 스크립트를 잘못 불러오는 문제가 있어 9.5.1을 씁니다. Git Bash의 `./gradlew`는 빈 인자를 하나 더 넘기는 문제가 있으니 `gradlew.bat`을 쓰세요.
 
 ### PC 앱 (.NET 10 SDK)
@@ -53,6 +55,12 @@ cd pc
 dotnet test MotionPointer.slnx
 dotnet publish src/MotionPointer -c Release -o dist
 dist\motion-pointer.exe
+```
+
+배포용 단일 실행 파일(.NET 설치 불필요):
+
+```powershell
+dotnet publish src/MotionPointer -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o release
 ```
 
 ## 구조

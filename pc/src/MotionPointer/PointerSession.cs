@@ -16,15 +16,26 @@ internal interface IMouseOutput
 /// <summary>
 /// 연결 하나에서 받은 프레임을 마우스 입력으로 바꾼다.
 /// 일시정지 중에는 이동·휠·누름을 무시하되 뗌은 반영하고, 연결이 끝나면 눌린 버튼을 모두 뗀다.
+/// 연결 스레드(<see cref="Apply"/>)와 단축키 스레드(<see cref="ReleaseAll"/>)가 함께 호출하므로 잠금으로 직렬화한다.
 /// </summary>
 internal sealed class PointerSession(IMouseOutput output, Func<bool> isEnabled)
 {
+    private readonly object _gate = new();
+
     public byte Buttons { get; private set; }
     public byte? PeerVersion { get; private set; }
     public long Moves { get; private set; }
     public long Clicks { get; private set; }
 
     public void Apply(PointerFrame frame)
+    {
+        lock (_gate)
+        {
+            ApplyLocked(frame);
+        }
+    }
+
+    private void ApplyLocked(PointerFrame frame)
     {
         switch (frame)
         {
@@ -58,10 +69,15 @@ internal sealed class PointerSession(IMouseOutput output, Func<bool> isEnabled)
     /// <summary>연결 종료·일시정지 시 눌린 버튼을 모두 뗀다.</summary>
     public void ReleaseAll()
     {
-        if (Buttons != 0)
+        lock (_gate)
         {
-            output.SetButtons(Buttons, 0);
-            Buttons = 0;
+            if (Buttons != 0)
+            {
+                // 출력이 실패해도 상태는 "뗌"으로 둔다. 다음 BUTTONS 프레임이 다시 맞춘다.
+                var held = Buttons;
+                Buttons = 0;
+                output.SetButtons(held, 0);
+            }
         }
     }
 }

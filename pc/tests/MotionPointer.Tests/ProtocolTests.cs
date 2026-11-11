@@ -135,3 +135,29 @@ public class PointerSessionTests
         Assert.Equal(["buttons 0->5", "buttons 5->0"], mouse.Events);
     }
 }
+
+internal sealed class FailingMouse : IMouseOutput
+{
+    public void MoveBy(int dx, int dy) { }
+
+    public void SetButtons(byte previous, byte current) =>
+        throw new System.ComponentModel.Win32Exception(5, "blocked");
+
+    public void Wheel(int notches) { }
+}
+
+public class PointerSessionFailureTests
+{
+    [Fact]
+    public void ReleaseAll_clears_state_even_when_output_fails()
+    {
+        var session = new PointerSession(new FailingMouse(), () => true);
+        Assert.Throws<System.ComponentModel.Win32Exception>(() => session.Apply(new PointerFrame.Buttons(1)));
+        Assert.Equal(0, session.Buttons); // 누름 전달이 실패했으면 눌린 것으로 기록하지 않는다
+
+        var mouse = new RecordingMouse();
+        var held = new PointerSession(mouse, () => true);
+        held.Apply(new PointerFrame.Buttons(1));
+        Assert.Equal(1, held.Buttons);
+    }
+}
