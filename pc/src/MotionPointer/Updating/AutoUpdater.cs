@@ -85,7 +85,16 @@ internal static class AutoUpdater
         }
 
         log($"새 버전({target.Version})을 적용하고 다시 시작합니다.");
-        // 이 호출은 현재 프로세스를 끝내고 업데이터가 파일을 바꾼 뒤 새 버전을 실행한다.
-        manager.ApplyUpdatesAndRestart(target, restartArgs);
+        try
+        {
+            // 성공하면 현재 프로세스가 끝나고, 업데이터가 파일을 바꾼 뒤 새 버전을 실행한다(돌아오지 않음).
+            manager.ApplyUpdatesAndRestart(target, restartArgs);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // 업데이터(Update.exe)를 실행하지 못한 경우(실행 차단·파일 손상 등). 앱은 현재 버전으로 계속 쓴다.
+            // 내려받은 패키지는 남아 있으므로 다음 실행 때 다시 적용을 시도한다.
+            log($"업데이트를 적용하지 못해 현재 버전으로 실행합니다: {ex.Message}");
+        }
     }
 }
