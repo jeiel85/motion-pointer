@@ -6,7 +6,7 @@
 
 | | 블루투스 마우스(HID) | PC 앱 |
 | --- | --- | --- |
-| PC 쪽 설치 | 없음 | `motion-pointer.exe` 실행 |
+| PC 쪽 설치 | 없음 | Motion Pointer 설치(자동 업데이트) |
 | 동작하는 곳 | 윈도우·우분투·맥·태블릿·TV 등 블루투스 마우스를 받는 모든 기기 | 윈도우 |
 | 커서 이동 | 운영체제의 마우스 가속이 함께 적용됨 | 가속 없이 앱이 계산한 그대로 |
 | 일시정지 | 폰에서 연결 끊기 | PC에서 `Ctrl+Alt+F9` |
@@ -30,9 +30,19 @@
 
 ### PC 앱 모드
 
-1. PC에서 `motion-pointer.exe`를 실행합니다(아래 빌드 참고).
+1. [릴리스](https://github.com/jeiel85/motion-pointer/releases/latest)에서 `MotionPointer-win-Setup.exe`를 받아 실행합니다. 관리자 권한 없이 사용자 폴더(`%LOCALAPPDATA%\MotionPointer`)에 설치되고 시작 메뉴에 "Motion Pointer"가 생깁니다. 설치 없이 쓰려면 `MotionPointer-win-Portable.zip`을 풀어서 실행합니다.
 2. 폰 앱에서 "PC 앱"을 고르고 그 PC를 선택해 연결합니다.
 3. 이미 페어링된 기기만 연결됩니다(인증·암호화된 블루투스 링크). 같은 Wi-Fi의 다른 사람이 마우스를 조작할 수 없습니다.
+
+#### 자동 업데이트
+
+설치본(포터블 포함)은 시작할 때마다 GitHub 릴리스에서 새 버전을 확인합니다. 새 버전이 있으면 내려받아 적용하고 다시 시작합니다. 바뀐 부분만 담은 델타 패키지를 쓰고, 내려받은 파일은 해시로 검증합니다.
+
+- 확인이나 다운로드가 실패하면(오프라인, GitHub 응답 없음 등) 현재 버전으로 그대로 실행합니다. 확인은 최대 15초까지만 기다립니다.
+- `motion-pointer --no-update`: 이번 실행에서는 업데이트를 확인하지 않습니다.
+- `motion-pointer --update-source <폴더|URL>`: GitHub 대신 지정한 곳에서 업데이트를 찾습니다(시험·자체 배포용).
+- 개발 중 `dotnet run`이나 `dist\` 실행처럼 설치본이 아닌 경우에는 업데이트를 건너뜁니다.
+- 제거는 윈도우 설정 > 앱에서 "Motion Pointer"를 지우면 됩니다.
 
 ## 빌드
 
@@ -57,11 +67,15 @@ dotnet publish src/MotionPointer -c Release -o dist
 dist\motion-pointer.exe
 ```
 
-배포용 단일 실행 파일(.NET 설치 불필요):
+배포용 설치본·포터블·업데이트 패키지는 [Velopack](https://velopack.io)으로 만듭니다.
 
 ```powershell
-dotnet publish src/MotionPointer -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o release
+dotnet tool install -g vpk --version 1.2.161   # Velopack 패키지 버전과 맞춘다
+cd pc
+.\build-release.ps1 -Version 0.2.0            # csproj <Version>과 같아야 함
 ```
+
+`pc\release\`에 생긴 파일(`*-Setup.exe`, `*-Portable.zip`, `*.nupkg`, `releases.win.json`, `assets.win.json`, `RELEASES`)을 **모두** GitHub 릴리스에 올려야 설치본이 새 버전을 찾습니다. 스크립트는 직전 릴리스를 받아 델타 패키지도 만듭니다.
 
 ## 구조
 

@@ -10,12 +10,17 @@
     <PlatformTarget>x64</PlatformTarget>
     <AssemblyName>motion-pointer</AssemblyName>
     <RootNamespace>MotionPointer</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
+    <ApplicationIcon>../../assets/motion-pointer.ico</ApplicationIcon>
     <Description>Receives pointer input from the Motion Pointer phone app over Bluetooth RFCOMM.</Description>
   </PropertyGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="MotionPointer.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
 
 </Project>
