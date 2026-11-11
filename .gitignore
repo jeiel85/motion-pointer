@@ -22,3 +22,4 @@ release-signing.properties
 
 # 배포 산출물
 pc/release/
+pc/publish/

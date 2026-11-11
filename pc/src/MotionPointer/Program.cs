@@ -3,6 +3,8 @@ using System.Text;
 using MotionPointer.Bluetooth;
 using MotionPointer.Platform;
 using MotionPointer.Protocol;
+using MotionPointer.Updating;
+using Velopack;
 using Windows.Networking.Sockets;
 
 namespace MotionPointer;
@@ -11,20 +13,36 @@ internal static class Program
 {
     private const uint VkF9 = 0x78;
 
-    private static async Task<int> Main(string[] args)
+    private static string AppVersion =>
+        typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "unknown";
+
+    private static int Main(string[] args)
+    {
+        // 설치·제거·업데이트 직후 Velopack이 이 프로세스를 훅으로 실행하므로 진입점 첫 줄에서 호출한다.
+        // (async Main 안에 두면 컴파일러가 만든 상태 머신 안으로 들어가 vpk가 진입점으로 인식하지 못한다.)
+        VelopackApp.Build().Run();
+        return RunAsync(args).GetAwaiter().GetResult();
+    }
+
+    private static async Task<int> RunAsync(string[] args)
     {
         Console.OutputEncoding = Encoding.UTF8;
-        if (args.Length > 0 && args[0] is "help" or "-h" or "--help" or "/?")
+        CliOptions options;
+        try
+        {
+            options = CliOptions.Parse(args);
+        }
+        catch (ArgumentException ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            PrintHelp();
+            return 64;
+        }
+
+        if (options.ShowHelp)
         {
             PrintHelp();
             return 0;
-        }
-
-        if (args.Length > 0 && args[0] != "run")
-        {
-            Console.Error.WriteLine($"알 수 없는 명령: {args[0]}");
-            PrintHelp();
-            return 64;
         }
 
         using var cancellation = new CancellationTokenSource();
@@ -33,6 +51,19 @@ internal static class Program
             e.Cancel = true;
             cancellation.Cancel();
         };
+
+        Console.WriteLine($"Motion Pointer {AppVersion}");
+        if (options.CheckForUpdates)
+        {
+            try
+            {
+                await AutoUpdater.UpdateIfAvailableAsync(options.UpdateSource, args, Log, cancellation.Token);
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
+                return 0;
+            }
+        }
 
         Dpi.EnablePerMonitorAwareness();
         var app = new App();
@@ -54,6 +85,12 @@ internal static class Program
 
             사용법:
               motion-pointer [run]   블루투스로 폰 연결을 기다립니다(기본).
+
+            옵션:
+              --no-update                  시작할 때 업데이트를 확인하지 않습니다.
+              --update-source 경로|URL     GitHub 대신 이 폴더·주소에서 업데이트를 찾습니다(시험·자체 배포용).
+
+            설치본은 시작할 때마다 GitHub 릴리스에서 새 버전을 확인하고, 있으면 자동으로 업데이트한 뒤 다시 시작합니다.
 
             준비:
               1. 폰과 이 PC가 블루투스로 페어링되어 있어야 합니다.
@@ -216,6 +253,7 @@ internal static class Program
             }
         }
 
-        private static void Log(string message) => Console.WriteLine($"{DateTime.Now:HH:mm:ss} {message}");
     }
+
+    private static void Log(string message) => Console.WriteLine($"{DateTime.Now:HH:mm:ss} {message}");
 }
