@@ -1,0 +1,21 @@
+# .NET
+bin/
+obj/
+dist/
+.vs/
+*.user
+TestResults/
+
+# Android / Gradle
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.kotlin/
+
+# 서명 키 (절대 커밋하지 않음)
+.keystore/
+*.jks
+*.keystore
+release-signing.properties

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- Windows.Devices.Bluetooth.Rfcomm(WinRT) 사용을 위해 Windows SDK 버전을 지정 -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PlatformTarget>x64</PlatformTarget>
+    <AssemblyName>motion-pointer</AssemblyName>
+    <RootNamespace>MotionPointer</RootNamespace>
+    <Version>0.1.0</Version>
+    <Description>Receives pointer input from the Motion Pointer phone app over Bluetooth RFCOMM.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MotionPointer.Tests" />
+  </ItemGroup>
+
+</Project>

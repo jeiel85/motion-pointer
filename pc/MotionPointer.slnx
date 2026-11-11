@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MotionPointer/MotionPointer.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MotionPointer.Tests/MotionPointer.Tests.csproj" />
+  </Folder>
+</Solution>

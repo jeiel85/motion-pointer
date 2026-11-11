@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="background">#FF101418</color>
+    <color name="surface">#FF1E2630</color>
+    <color name="surface_pressed">#FF2F6FDE</color>
+    <color name="text">#FFE8EEF4</color>
+    <color name="text_dim">#FF9AA8B6</color>
+    <color name="icon_background">#FF1E2630</color>
+    <color name="icon_foreground">#FF5B9BFF</color>
+</resources>
