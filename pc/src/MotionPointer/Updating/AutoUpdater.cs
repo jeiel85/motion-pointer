@@ -31,6 +31,14 @@ internal static class AutoUpdater
             return;
         }
 
+        // 지난번에 내려받았지만 적용하지 못한 업데이트가 있으면 먼저 적용한다(오프라인이어도 가능).
+        if (manager.UpdatePendingRestart is { } pending)
+        {
+            log($"내려받아 둔 새 버전({pending.Version})을 적용하고 다시 시작합니다.");
+            ApplyAndRestart(manager, pending, restartArgs, log);
+            return;
+        }
+
         var source = sourceOverride ?? "GitHub 릴리스";
         log($"업데이트 확인 중… ({source})");
 
@@ -85,6 +93,11 @@ internal static class AutoUpdater
         }
 
         log($"새 버전({target.Version})을 적용하고 다시 시작합니다.");
+        ApplyAndRestart(manager, target, restartArgs, log);
+    }
+
+    private static void ApplyAndRestart(UpdateManager manager, VelopackAsset target, string[] restartArgs, Action<string> log)
+    {
         try
         {
             // 성공하면 현재 프로세스가 끝나고, 업데이터가 파일을 바꾼 뒤 새 버전을 실행한다(돌아오지 않음).

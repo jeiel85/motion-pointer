@@ -20,7 +20,9 @@ internal static class Program
     {
         // 설치·제거·업데이트 직후 Velopack이 이 프로세스를 훅으로 실행하므로 진입점 첫 줄에서 호출한다.
         // (async Main 안에 두면 컴파일러가 만든 상태 머신 안으로 들어가 vpk가 진입점으로 인식하지 못한다.)
-        VelopackApp.Build().Run();
+        // 내려받아 둔 업데이트를 여기서 자동 적용하면 실패(Update.exe 실행 차단 등)를 잡을 수 없어
+        // 앱이 매번 시작 전에 종료될 수 있다. 적용은 실패를 처리하는 AutoUpdater에서만 한다.
+        VelopackApp.Build().SetAutoApplyOnStartup(false).Run();
         return RunAsync(args).GetAwaiter().GetResult();
     }
 
