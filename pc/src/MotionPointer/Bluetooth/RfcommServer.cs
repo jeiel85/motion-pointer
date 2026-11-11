@@ -50,17 +50,29 @@ internal sealed class RfcommServer : IAsyncDisposable
         var listener = new StreamSocketListener();
         var server = new RfcommServer(provider, listener, handleConnection, log);
         listener.ConnectionReceived += server.OnConnectionReceived;
-        await listener.BindServiceNameAsync(
-            provider.ServiceId.AsString(),
-            SocketProtectionLevel.BluetoothEncryptionWithAuthentication);
+        try
+        {
+            await listener.BindServiceNameAsync(
+                provider.ServiceId.AsString(),
+                SocketProtectionLevel.BluetoothEncryptionWithAuthentication);
 
-        var name = Encoding.UTF8.GetBytes(PointerProtocol.ServiceName);
-        using var writer = new DataWriter();
-        writer.WriteByte(SdpTextType8BitLength);
-        writer.WriteByte((byte)name.Length);
-        writer.WriteBytes(name);
-        provider.SdpRawAttributes.Add(SdpServiceNameAttributeId, writer.DetachBuffer());
-        provider.StartAdvertising(listener);
+            var name = Encoding.UTF8.GetBytes(PointerProtocol.ServiceName);
+            using var writer = new DataWriter();
+            writer.WriteByte(SdpTextType8BitLength);
+            writer.WriteByte((byte)name.Length);
+            writer.WriteBytes(name);
+            provider.SdpRawAttributes.Add(SdpServiceNameAttributeId, writer.DetachBuffer());
+            provider.StartAdvertising(listener);
+        }
+        catch (Exception ex) when (ex is COMException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            // 블루투스 라디오가 꺼져 있으면 여기서 실패한다. 반쯤 열린 리스너를 남기지 않는다.
+            listener.ConnectionReceived -= server.OnConnectionReceived;
+            listener.Dispose();
+            throw new BluetoothUnavailableException(
+                $"블루투스 서비스를 시작할 수 없습니다. 블루투스가 켜져 있는지 확인하세요: {ex.Message}", ex);
+        }
+
         return server;
     }
 

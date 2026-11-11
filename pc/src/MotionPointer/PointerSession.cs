@@ -16,15 +16,26 @@ internal interface IMouseOutput
 /// <summary>
 /// 연결 하나에서 받은 프레임을 마우스 입력으로 바꾼다.
 /// 일시정지 중에는 이동·휠·누름을 무시하되 뗌은 반영하고, 연결이 끝나면 눌린 버튼을 모두 뗀다.
+/// 연결 스레드(<see cref="Apply"/>)와 단축키 스레드(<see cref="ReleaseAll"/>)가 함께 호출하므로 잠금으로 직렬화한다.
 /// </summary>
 internal sealed class PointerSession(IMouseOutput output, Func<bool> isEnabled)
 {
+    private readonly object _gate = new();
+
     public byte Buttons { get; private set; }
     public byte? PeerVersion { get; private set; }
     public long Moves { get; private set; }
     public long Clicks { get; private set; }
 
     public void Apply(PointerFrame frame)
+    {
+        lock (_gate)
+        {
+            ApplyLocked(frame);
+        }
+    }
+
+    private void ApplyLocked(PointerFrame frame)
     {
         switch (frame)
         {
@@ -42,9 +53,11 @@ internal sealed class PointerSession(IMouseOutput output, Func<bool> isEnabled)
                 var next = isEnabled() ? requested : (byte)(Buttons & requested);
                 if (next != Buttons)
                 {
-                    Clicks += System.Numerics.BitOperations.PopCount((uint)(next & ~Buttons));
+                    // 전달에 성공했을 때만 상태를 바꾼다. 실패하면 이전 상태가 남아 다음 프레임에서 다시 시도된다.
+                    var pressed = System.Numerics.BitOperations.PopCount((uint)(next & ~Buttons));
                     output.SetButtons(Buttons, next);
                     Buttons = next;
+                    Clicks += pressed;
                 }
 
                 break;
@@ -58,10 +71,15 @@ internal sealed class PointerSession(IMouseOutput output, Func<bool> isEnabled)
     /// <summary>연결 종료·일시정지 시 눌린 버튼을 모두 뗀다.</summary>
     public void ReleaseAll()
     {
-        if (Buttons != 0)
+        lock (_gate)
         {
-            output.SetButtons(Buttons, 0);
-            Buttons = 0;
+            if (Buttons != 0)
+            {
+                // 뗌 전달이 실패하면 눌린 상태를 그대로 둔다. 그래야 다음 BUTTONS(0) 프레임이나
+                // 연결 종료 시 ReleaseAll이 다시 시도해서, 윈도우에 버튼이 눌린 채 남지 않는다.
+                output.SetButtons(Buttons, 0);
+                Buttons = 0;
+            }
         }
     }
 }

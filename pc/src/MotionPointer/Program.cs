@@ -68,7 +68,8 @@ internal static class Program
     private sealed class App
     {
         private int _enabled = 1;
-        private PointerSession? _session;
+        // 단축키 스레드(일시정지)와 연결 스레드가 함께 본다.
+        private volatile PointerSession? _session;
 
         private bool IsEnabled => Volatile.Read(ref _enabled) == 1;
 
@@ -110,7 +111,7 @@ internal static class Program
             var enabled = updated == 1;
             if (!enabled)
             {
-                _session?.ReleaseAll();
+                ReleaseButtons(_session);
             }
 
             Console.WriteLine();
@@ -188,7 +189,7 @@ internal static class Program
             }
             finally
             {
-                session.ReleaseAll();
+                ReleaseButtons(session);
                 if (ReferenceEquals(_session, session))
                 {
                     _session = null;
@@ -196,6 +197,22 @@ internal static class Program
 
                 Console.WriteLine();
                 Log($"연결 끊김: {peer}" + (session.PeerVersion is null ? " (HELLO를 받지 못함)" : ""));
+            }
+        }
+
+        /// <summary>
+        /// 눌린 버튼을 뗀다. 단축키 스레드나 finally에서 부르므로 입력 전달 실패가 앱을 죽이지 않게 기록만 한다.
+        /// </summary>
+        private static void ReleaseButtons(PointerSession? session)
+        {
+            try
+            {
+                session?.ReleaseAll();
+            }
+            catch (System.ComponentModel.Win32Exception ex)
+            {
+                Console.WriteLine();
+                Log($"버튼을 떼지 못했습니다(관리자 권한 창 위일 수 있음): {ex.Message}");
             }
         }
 

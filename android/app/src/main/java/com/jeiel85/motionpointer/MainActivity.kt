@@ -55,7 +55,9 @@ class MainActivity : Activity() {
     private var moving = false
 
     // UI 스레드 상태
+    private var linkActive = false // 연결 시도부터 끊기까지
     private var connected = false
+    private var padHeld = false
     private var sensorRegistered = false
     private var devices: List<BluetoothDevice> = emptyList()
 
@@ -82,7 +84,7 @@ class MainActivity : Activity() {
         sensitivityLabel = findViewById(R.id.sensitivityLabel)
 
         modeGroup.check(if (prefs.getString(PREF_MODE, MODE_HID) == MODE_PC) R.id.modePc else R.id.modeHid)
-        connectButton.setOnClickListener { if (output == null) connect() else disconnect("연결을 끊었습니다.") }
+        connectButton.setOnClickListener { if (linkActive) disconnect("연결을 끊었습니다.") else connect() }
         setUpSensitivity()
         setUpPad()
         setUpButton(R.id.leftButton, Buttons.LEFT)
@@ -95,7 +97,8 @@ class MainActivity : Activity() {
             return
         }
 
-        if (hasBluetoothPermission()) loadDevices() else requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT), REQUEST_BLUETOOTH)
+        // 기기 목록은 onResume에서 읽는다(블루투스를 나중에 켜거나 새로 페어링해도 반영되도록).
+        if (!hasBluetoothPermission()) requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT), REQUEST_BLUETOOTH)
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
@@ -107,7 +110,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        if (connected) registerSensor()
+        if (!linkActive && connectButton.isEnabled && hasBluetoothPermission()) loadDevices()
     }
 
     override fun onPause() {
@@ -138,22 +141,26 @@ class MainActivity : Activity() {
 
     private fun loadDevices() {
         val bt = adapter
+        // 다시 읽을 때 사용자가 고르던 기기를 유지한다. 처음이면 마지막으로 연결한 기기.
+        val selected = devices.getOrNull(deviceSpinner.selectedItemPosition)?.address ?: prefs.getString(PREF_DEVICE, null)
         if (bt == null || !bt.isEnabled) {
-            showStatus("블루투스를 켠 뒤 앱을 다시 열어 주세요.")
+            devices = emptyList()
+            deviceSpinner.adapter = null
+            showStatus("블루투스가 꺼져 있습니다. 블루투스를 켜고 이 화면으로 돌아오세요.")
             return
         }
 
         // 컴퓨터를 앞에, 그다음 이름순.
         devices = bt.bondedDevices.sortedWith(
             compareBy<BluetoothDevice>({ it.bluetoothClass?.majorDeviceClass != BluetoothClass.Device.Major.COMPUTER }, { it.label() }))
+        deviceSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, devices.map { it.label() })
         if (devices.isEmpty()) {
-            showStatus("페어링된 기기가 없습니다. 먼저 폰 블루투스 설정에서 PC와 페어링하세요.")
+            showStatus("페어링된 기기가 없습니다. 폰 블루투스 설정에서 PC와 페어링한 뒤 이 화면으로 돌아오세요.")
             return
         }
 
-        deviceSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, devices.map { it.label() })
-        val saved = devices.indexOfFirst { it.address == prefs.getString(PREF_DEVICE, null) }
-        if (saved >= 0) deviceSpinner.setSelection(saved)
+        val index = devices.indexOfFirst { it.address == selected }
+        if (index >= 0) deviceSpinner.setSelection(index)
         showStatus("PC를 고르고 연결을 누르세요.")
     }
 
@@ -168,6 +175,7 @@ class MainActivity : Activity() {
 
         val onState: (LinkState) -> Unit = { state -> runOnUiThread { applyState(state) } }
         val newOutput = if (pcMode) PcLinkOutput(host, onState) else HidMouseOutput(this, bt, host, onState)
+        linkActive = true
         setControlsEnabled(false)
         connectButton.text = getString(R.string.disconnect)
         pointer.post {
@@ -184,6 +192,7 @@ class MainActivity : Activity() {
             output?.close()
             output = null
         }
+        linkActive = false
         connected = false
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setControlsEnabled(true)
@@ -197,7 +206,8 @@ class MainActivity : Activity() {
             is LinkState.Connected -> {
                 connected = true
                 window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                registerSensor()
+                // 연결되기 전부터 패드를 누르고 있었다면 손을 떼지 않아도 바로 움직이게 한다.
+                if (padHeld) registerSensor()
                 showStatus(state.message)
             }
             is LinkState.Disconnected -> disconnect(state.message)
@@ -241,19 +251,24 @@ class MainActivity : Activity() {
         })
     }
 
+    /** 회전 센서는 연결된 상태에서 패드를 누르고 있는 동안만 켠다(배터리). */
     private fun setUpPad() {
         val pad = findViewById<View>(R.id.pad)
         pad.setOnTouchListener { view, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     view.isPressed = true
+                    padHeld = true
                     pointer.post {
                         mapper.reset()
                         moving = true
                     }
+                    if (connected) registerSensor()
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     view.isPressed = false
+                    padHeld = false
+                    unregisterSensor()
                     pointer.post { moving = false }
                 }
             }
