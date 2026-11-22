@@ -1,10 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="background">#FF101418</color>
-    <color name="surface">#FF1E2630</color>
-    <color name="surface_pressed">#FF2F6FDE</color>
-    <color name="text">#FFE8EEF4</color>
-    <color name="text_dim">#FF9AA8B6</color>
-    <color name="icon_background">#FF1E2630</color>
+    <color name="background">#FF0E1116</color>
+    <color name="surface">#FF171D25</color>
+    <color name="surface_raised">#FF1E2630</color>
+    <color name="surface_pressed">#FF243044</color>
+    <color name="outline">#FF2A3442</color>
+    <color name="outline_strong">#FF3A4A60</color>
+
+    <color name="accent">#FF3F7BFF</color>
+    <color name="accent_pressed">#FF2F62D6</color>
+    <color name="accent_soft">#FF2A4F9E</color>
+    <color name="accent_wash">#FF1B2A3F</color>
+
+    <color name="text">#FFE9EFF6</color>
+    <color name="text_dim">#FF93A1B1</color>
+    <color name="text_faint">#FF6B7887</color>
+
+    <color name="ok">#FF35C48A</color>
+    <color name="warn">#FFF0B429</color>
+    <color name="error">#FFFF7A8A</color>
+
+    <color name="ripple">#33FFFFFF</color>
+    <color name="transparent">#00000000</color>
+
+    <!-- 런처 아이콘 -->
+    <color name="icon_background">#FF171D25</color>
     <color name="icon_foreground">#FF5B9BFF</color>
 </resources>
