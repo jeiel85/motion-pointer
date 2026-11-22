@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 이름에 점이 있으면 AAPT가 부모 스타일(Text·Widget)을 찾으므로 parent=""를 준다. -->
+<resources>
+    <style name="Text.AppTitle" parent="">
+        <item name="android:textSize">19sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/text</item>
+        <item name="android:letterSpacing">0.01</item>
+    </style>
+
+    <style name="Text.Tagline" parent="">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">@color/text_faint</item>
+        <item name="android:letterSpacing">0.02</item>
+    </style>
+
+    <style name="Text.Section" parent="">
+        <item name="android:textSize">11sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/text_faint</item>
+        <item name="android:letterSpacing">0.14</item>
+    </style>
+
+    <style name="Widget.Card" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:background">@drawable/bg_card</item>
+        <item name="android:padding">@dimen/card_padding</item>
+    </style>
+
+    <style name="Widget.Segment" parent="">
+        <item name="android:button">@null</item>
+        <item name="android:background">@drawable/bg_segment_item</item>
+        <item name="android:gravity">center</item>
+        <item name="android:height">44dp</item>
+        <item name="android:minHeight">0dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:paddingStart">0dp</item>
+        <item name="android:paddingEnd">0dp</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/segment_text</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:stateListAnimator">@null</item>
+    </style>
+
+    <style name="Widget.ActionPad" parent="">
+        <item name="android:minHeight">@dimen/action_height</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:gravity">center</item>
+        <item name="android:background">@drawable/bg_surface_tappable</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+        <item name="android:paddingTop">12dp</item>
+        <item name="android:paddingBottom">12dp</item>
+    </style>
+
+    <style name="Text.ActionLabel" parent="">
+        <item name="android:textSize">16sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/action_text</item>
+    </style>
+
+    <style name="Text.ActionCaption" parent="">
+        <item name="android:textSize">11sp</item>
+        <item name="android:textColor">@color/action_caption</item>
+        <item name="android:letterSpacing">0.04</item>
+    </style>
+</resources>

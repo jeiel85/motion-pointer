@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      색은 항상 이 앱의 고정 팔레트를 쓴다. DeviceDefault는 시스템 라이트·다크 설정에 따라
+      라이트 변형으로 풀리므로, 다크 고정인 Theme.Material을 부모로 쓴다.
+    -->
+    <style name="Theme.MotionPointer" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/background</item>
+        <item name="android:colorBackground">@color/background</item>
+        <item name="android:textColorPrimary">@color/text</item>
+        <item name="android:textColorSecondary">@color/text_dim</item>
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:colorControlActivated">@color/accent</item>
+        <item name="android:colorControlNormal">@color/text_dim</item>
+
+        <!-- 상태 바·내비게이션 바까지 화면을 쓰고 여백은 코드에서 인셋으로 준다. -->
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>

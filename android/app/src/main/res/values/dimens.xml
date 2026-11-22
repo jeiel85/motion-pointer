@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="screen_padding_h">16dp</dimen>
+    <dimen name="screen_padding_v">12dp</dimen>
+    <dimen name="gap">12dp</dimen>
+    <dimen name="card_padding">14dp</dimen>
+    <dimen name="corner_card">20dp</dimen>
+    <dimen name="corner_field">14dp</dimen>
+    <dimen name="action_height">128dp</dimen>
+</resources>
