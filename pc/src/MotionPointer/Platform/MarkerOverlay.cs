@@ -161,7 +161,13 @@ internal sealed class MarkerOverlay : IDisposable
                 PostQuitMessage(0);
                 return IntPtr.Zero;
 
+            case WmClose:
+                DestroyWindow(window);
+                return IntPtr.Zero;
+
             case WmDestroy:
+                // 창이 외부에서 닫히거나 Dispose 폴백으로 WM_CLOSE가 와도 메시지 루프를 끝낸다.
+                PostQuitMessage(0);
                 return IntPtr.Zero;
 
             default:
@@ -286,6 +292,9 @@ internal sealed class MarkerOverlay : IDisposable
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool PostMessageW(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool DestroyWindow(IntPtr window);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern int GetMessageW(out Message message, IntPtr window, uint filterMin, uint filterMax);
