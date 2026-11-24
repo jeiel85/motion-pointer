@@ -9,6 +9,8 @@ internal abstract record PointerFrame
     public sealed record Move(short Dx, short Dy) : PointerFrame;
     public sealed record Buttons(byte Mask) : PointerFrame;
     public sealed record Wheel(sbyte Notches) : PointerFrame;
+    public sealed record Absolute(ushort X, ushort Y) : PointerFrame;
+    public sealed record AbsoluteMode(bool Enabled) : PointerFrame;
     public sealed record Unknown(byte Type, int Length) : PointerFrame;
 }
 
@@ -16,7 +18,7 @@ internal sealed class ProtocolException(string message) : Exception(message);
 
 internal static class PointerProtocol
 {
-    public const byte Version = 1;
+    public const byte Version = 2;
     public static readonly Guid ServiceUuid = new("743082fe-0322-40f3-8b12-844340dda67f");
     public const string ServiceName = "Motion Pointer";
 
@@ -24,6 +26,8 @@ internal static class PointerProtocol
     public const byte TypeMove = 0x02;
     public const byte TypeButtons = 0x03;
     public const byte TypeWheel = 0x04;
+    public const byte TypeAbsolute = 0x05;
+    public const byte TypeAbsoluteMode = 0x06;
     public const byte TypeWelcome = 0x81;
 
     public const byte ButtonLeft = 0x01;
@@ -79,6 +83,10 @@ internal sealed class FrameDecoder
                 BinaryPrimitives.ReadInt16LittleEndian(payload.AsSpan(2))),
             PointerProtocol.TypeButtons => new PointerFrame.Buttons(Expect(payload, 1, "BUTTONS")[0]),
             PointerProtocol.TypeWheel => new PointerFrame.Wheel(unchecked((sbyte)Expect(payload, 1, "WHEEL")[0])),
+            PointerProtocol.TypeAbsolute => new PointerFrame.Absolute(
+                BinaryPrimitives.ReadUInt16LittleEndian(Expect(payload, 4, "ABSOLUTE")),
+                BinaryPrimitives.ReadUInt16LittleEndian(payload.AsSpan(2))),
+            PointerProtocol.TypeAbsoluteMode => new PointerFrame.AbsoluteMode(Expect(payload, 1, "ABSOLUTE_MODE")[0] != 0),
             _ => new PointerFrame.Unknown(type, payload.Length),
         };
     }

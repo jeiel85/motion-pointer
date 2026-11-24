@@ -9,6 +9,8 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
+import android.graphics.Color
+import android.graphics.Typeface
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -18,13 +20,17 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
 import android.text.TextUtils
+import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
+import android.view.TextureView
 import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.RadioGroup
 import android.widget.SeekBar
@@ -39,6 +45,7 @@ import kotlin.math.pow
  */
 @SuppressLint("ClickableViewAccessibility", "MissingPermission")
 class MainActivity : Activity() {
+    private lateinit var root: View
     private lateinit var content: View
     private lateinit var statusBadge: TextView
     private lateinit var statusDot: View
@@ -47,6 +54,7 @@ class MainActivity : Activity() {
     private lateinit var deviceSpinner: Spinner
     private lateinit var connectButton: Button
     private lateinit var refreshButton: ImageButton
+    private lateinit var absoluteButton: Button
     private lateinit var sensitivityLabel: TextView
 
     private val prefs by lazy { getSharedPreferences("motion-pointer", MODE_PRIVATE) }
@@ -61,9 +69,17 @@ class MainActivity : Activity() {
     private var output: PointerOutput? = null
     private var buttons = 0
     private var moving = false
+    @Volatile private var absoluteModeActive = false
+    private var absolutePointer: AbsolutePointer? = null
+    private var absolutePrevious: Quat? = null
 
     // UI 스레드 상태
     private var linkActive = false // 연결 시도부터 끊기까지
+    private var absoluteEnabled = false
+    private var peerProtocolVersion: Byte = 1
+    private var cameraTracker: CameraTracker? = null
+    private var cameraOverlay: View? = null
+    private var cameraStatus: TextView? = null
     private var connected = false
     private var padHeld = false
     private var sensorRegistered = false
@@ -74,12 +90,24 @@ class MainActivity : Activity() {
         private val q = FloatArray(4)
 
         override fun onSensorChanged(event: SensorEvent) {
-            if (!moving) return
             SensorManager.getQuaternionFromVector(q, event.values)
-            val delta = mapper.update(
-                Quat(q[0].toDouble(), q[1].toDouble(), q[2].toDouble(), q[3].toDouble()),
-                event.timestamp,
-            )
+            val orientation = Quat(q[0].toDouble(), q[1].toDouble(), q[2].toDouble(), q[3].toDouble())
+
+            if (absoluteModeActive) {
+                // 절대 모드에서는 패드 입력과 무관하게 자세를 추적한다. 마커를 잃으면 position()이 null이다.
+                val previous = absolutePrevious
+                absolutePrevious = orientation
+                if (previous == null) return
+                val tracker = absolutePointer ?: return
+                val (yawDeg, pitchDeg) = PointerMapper.project(previous, orientation)
+                tracker.onGyro(yawDeg, pitchDeg)
+                val position = tracker.position() ?: return
+                output?.sendAbsolute(position.x, position.y, buttons, 0)
+                return
+            }
+
+            if (!moving) return
+            val delta = mapper.update(orientation, event.timestamp)
             if (delta.dx != 0 || delta.dy != 0) output?.send(delta.dx, delta.dy, buttons, 0)
         }
 
@@ -90,6 +118,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        root = findViewById(R.id.root)
         content = findViewById(R.id.content)
         statusBadge = findViewById(R.id.statusBadge)
         statusDot = findViewById(R.id.statusDot)
@@ -98,6 +127,8 @@ class MainActivity : Activity() {
         deviceSpinner = findViewById(R.id.device)
         connectButton = findViewById(R.id.connect)
         refreshButton = findViewById(R.id.refresh)
+        absoluteButton = findViewById(R.id.absoluteMode)
+        absoluteButton.setOnClickListener { toggleAbsoluteMode() }
         sensitivityLabel = findViewById(R.id.sensitivityLabel)
 
         setUpEdgeToEdge()
@@ -166,6 +197,14 @@ class MainActivity : Activity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_CAMERA) {
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+                startAbsoluteMode()
+            } else {
+                showStatus(Status.ERROR, "카메라 권한 필요", "절대 포인팅을 쓰려면 설정 > 앱 > Motion Pointer에서 카메라를 허용하세요.")
+            }
+            return
+        }
         if (requestCode != REQUEST_BLUETOOTH) return
         if (hasBluetoothPermission()) {
             loadDevices()
@@ -185,6 +224,7 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         super.onPause()
+        if (absoluteEnabled) stopAbsoluteMode()
         unregisterSensor()
         // 화면을 벗어나면 터치가 취소되므로 패드를 누른 상태를 버린다.
         // 그대로 두면 돌아왔을 때 손가락 없이 센서만 켜진다.
@@ -215,8 +255,120 @@ class MainActivity : Activity() {
 
     private fun onModeChanged() {
         val pcMode = modeGroup.checkedRadioButtonId == R.id.modePc
+        if (!pcMode && absoluteEnabled) stopAbsoluteMode()
         prefs.edit().putString(PREF_MODE, if (pcMode) MODE_PC else MODE_HID).apply()
         if (!linkActive && !sensorMissing) loadDevices()
+    }
+
+    private fun toggleAbsoluteMode() {
+        if (absoluteEnabled) {
+            stopAbsoluteMode()
+            return
+        }
+        if (modeGroup.checkedRadioButtonId != R.id.modePc) {
+            showStatus(Status.ERROR, "모드 필요", getString(R.string.absolute_need_pc))
+            return
+        }
+        if (!connected) {
+            showStatus(Status.ERROR, "연결 필요", getString(R.string.absolute_need_connection))
+            return
+        }
+        if (peerProtocolVersion < 2) {
+            showStatus(Status.ERROR, "구버전 PC", "절대 포인팅은 PC 앱을 최신 버전으로 업데이트한 뒤 쓸 수 있습니다.")
+            return
+        }
+        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.CAMERA), REQUEST_CAMERA)
+            return
+        }
+        startAbsoluteMode()
+    }
+
+    private fun startAbsoluteMode() {
+        if (absoluteEnabled) return
+        absoluteEnabled = true
+        absoluteButton.setText(R.string.absolute_off)
+
+        val preview = TextureView(this)
+        val crosshair = TextView(this).apply {
+            text = "+"
+            textSize = 32f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+        }
+        val status = TextView(this).apply {
+            text = getString(R.string.absolute_guide)
+            setTextColor(Color.WHITE)
+            textSize = 13f
+            setBackgroundColor(Color.argb(170, 0, 0, 0))
+            val padding = (10 * resources.displayMetrics.density).toInt()
+            setPadding(padding, padding / 2, padding, padding / 2)
+        }
+        val matchParent = ViewGroup.LayoutParams.MATCH_PARENT
+        val marginPixels = (16 * resources.displayMetrics.density).toInt()
+        val overlay = FrameLayout(this).apply {
+            setBackgroundColor(Color.argb(90, 0, 0, 0))
+            addView(preview, FrameLayout.LayoutParams(matchParent, matchParent))
+            addView(crosshair, FrameLayout.LayoutParams(matchParent, matchParent))
+            addView(status, FrameLayout.LayoutParams(matchParent, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                topMargin = marginPixels
+            })
+        }
+        (root as ViewGroup).addView(overlay)
+        cameraOverlay = overlay
+        cameraStatus = status
+
+        pointer.post {
+            absoluteModeActive = true
+            absolutePointer = AbsolutePointer()
+            absolutePrevious = null
+            output?.setAbsoluteMode(true)
+        }
+        if (!sensorRegistered) registerSensor()
+
+        cameraTracker = CameraTracker(
+            this, preview,
+            onHomography = { homography ->
+                pointer.post {
+                    absolutePointer?.onCamera(homography, CameraTracker.IMAGE_WIDTH, CameraTracker.IMAGE_HEIGHT)
+                }
+            },
+            onLost = {
+                pointer.post {
+                    absolutePointer?.lost()
+                    absolutePrevious = null
+                    if (buttons != 0) {
+                        buttons = 0
+                        output?.send(0, 0, 0, 0)
+                    }
+                }
+                runOnUiThread {
+                    status.setText(R.string.absolute_lost)
+                    showStatus(Status.ERROR, "추적 손실", getString(R.string.absolute_lost))
+                }
+            },
+        ).also { it.start() }
+    }
+
+    private fun stopAbsoluteMode() {
+        if (!absoluteEnabled) return
+        absoluteEnabled = false
+        absoluteButton.setText(R.string.absolute_on)
+        cameraTracker?.close()
+        cameraTracker = null
+        cameraOverlay?.let { (root as ViewGroup).removeView(it) }
+        cameraOverlay = null
+        cameraStatus = null
+        pointer.post {
+            absoluteModeActive = false
+            absolutePointer = null
+            absolutePrevious = null
+            output?.setAbsoluteMode(false)
+        }
+        unregisterSensor()
+        if (padHeld && connected) registerSensor()
+        showStatus(Status.CONNECTED, "연결됨", "상대 모드로 돌아왔습니다.")
     }
 
     private fun loadDevices() {
@@ -280,6 +432,7 @@ class MainActivity : Activity() {
         val newOutput = if (pcMode) PcLinkOutput(host, onState) else HidMouseOutput(this, bt, host, onState)
         linkActive = true
         connected = false
+        peerProtocolVersion = 1
         setControlsEnabled(false)
         connectButton.text = getString(R.string.disconnect)
         showStatus(Status.CONNECTING, "연결 중", "${host.label()}에 연결하는 중…")
@@ -290,6 +443,7 @@ class MainActivity : Activity() {
     }
 
     private fun disconnect(message: String) {
+        if (absoluteEnabled) stopAbsoluteMode()
         unregisterSensor()
         pointer.post {
             moving = false
@@ -299,6 +453,7 @@ class MainActivity : Activity() {
         }
         linkActive = false
         connected = false
+        peerProtocolVersion = 1
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setControlsEnabled(true)
         connectButton.text = getString(R.string.connect)
@@ -312,6 +467,7 @@ class MainActivity : Activity() {
 
             is LinkState.Connected -> {
                 connected = true
+                peerProtocolVersion = state.protocolVersion
                 window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 // 연결되기 전부터 패드를 누르고 있었다면 손을 떼지 않아도 바로 움직이게 한다.
                 if (padHeld) registerSensor()
@@ -387,7 +543,7 @@ class MainActivity : Activity() {
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     view.isPressed = false
                     padHeld = false
-                    unregisterSensor()
+                    if (!absoluteModeActive) unregisterSensor()
                     pointer.post { moving = false }
                 }
             }
@@ -474,6 +630,7 @@ class MainActivity : Activity() {
 
     companion object {
         private const val REQUEST_BLUETOOTH = 1
+        private const val REQUEST_CAMERA = 2
         private const val SENSOR_PERIOD_US = 10_000 // 100Hz
         private const val PREF_MODE = "mode"
         private const val PREF_DEVICE = "device"

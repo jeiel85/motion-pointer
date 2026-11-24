@@ -95,10 +95,16 @@ class PointerMapperTest {
 class ProtocolsTest {
     @Test
     fun pc_frames_match_spec() {
-        assertBytes(intArrayOf(0x01, 1, 1), PointerProtocol.hello())
+        assertBytes(intArrayOf(0x01, 1, 2), PointerProtocol.hello())
         assertBytes(intArrayOf(0x02, 4, 0x05, 0x00, 0xFE, 0xFF), PointerProtocol.move(5, -2))
         assertBytes(intArrayOf(0x03, 1, 0x03), PointerProtocol.buttons(Buttons.LEFT or Buttons.RIGHT))
         assertBytes(intArrayOf(0x04, 1, 0xFF), PointerProtocol.wheel(-1))
+        assertBytes(intArrayOf(0x05, 4, 0x00, 0x80, 0xFF, 0x7F), PointerProtocol.absolute(32768.0 / 65535, 32767.0 / 65535))
+    }
+
+    @Test
+    fun absolute_frame_clamps_out_of_range_values() {
+        assertBytes(intArrayOf(0x05, 4, 0xFF, 0xFF, 0x00, 0x00), PointerProtocol.absolute(2.0, -1.0))
     }
 
     @Test

@@ -4,13 +4,15 @@ import java.util.UUID
 
 /** PC 앱 모드 규약. docs/protocol.md 와 PC 앱의 PointerProtocol.cs 와 같아야 한다. */
 object PointerProtocol {
-    const val VERSION = 1
+    const val VERSION = 2
     val SERVICE_UUID: UUID = UUID.fromString("743082fe-0322-40f3-8b12-844340dda67f")
 
     const val TYPE_HELLO = 0x01
     const val TYPE_MOVE = 0x02
     const val TYPE_BUTTONS = 0x03
     const val TYPE_WHEEL = 0x04
+    const val TYPE_ABSOLUTE = 0x05
+    const val TYPE_ABSOLUTE_MODE = 0x06
     const val TYPE_WELCOME = 0x81
 
     fun hello() = byteArrayOf(TYPE_HELLO.toByte(), 1, VERSION.toByte())
@@ -28,6 +30,20 @@ object PointerProtocol {
     fun buttons(mask: Int) = byteArrayOf(TYPE_BUTTONS.toByte(), 1, (mask and Buttons.ALL).toByte())
 
     fun wheel(notches: Int) = byteArrayOf(TYPE_WHEEL.toByte(), 1, notches.coerceIn(-127, 127).toByte())
+
+    /** 절대 포인팅 시작·종료. PC는 켜진 동안 주 모니터에 마커 4개를 띄운다. */
+    fun absoluteMode(enabled: Boolean) = byteArrayOf(TYPE_ABSOLUTE_MODE.toByte(), 1, if (enabled) 1 else 0)
+
+    /** 주 모니터 안의 정규화 좌표(0..1)를 16비트로 보낸다. 0이 왼쪽·위, 65535가 오른쪽·아래. */
+    fun absolute(x: Double, y: Double): ByteArray {
+        val px = (x.coerceIn(0.0, 1.0) * 65535).toInt()
+        val py = (y.coerceIn(0.0, 1.0) * 65535).toInt()
+        return byteArrayOf(
+            TYPE_ABSOLUTE.toByte(), 4,
+            px.toByte(), (px shr 8).toByte(),
+            py.toByte(), (py shr 8).toByte(),
+        )
+    }
 }
 
 object Buttons {
