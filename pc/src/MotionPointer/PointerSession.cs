@@ -7,6 +7,9 @@ internal interface IMouseOutput
 {
     void MoveBy(int dx, int dy);
 
+    /// <summary>주 모니터 안의 정규화 좌표(0..65535)로 커서를 옮긴다.</summary>
+    void MoveNormalized(ushort x, ushort y);
+
     /// <summary>previous → current 사이에 바뀐 버튼만 누르거나 뗀다.</summary>
     void SetButtons(byte previous, byte current);
 
@@ -25,6 +28,7 @@ internal sealed class PointerSession(IMouseOutput output, Func<bool> isEnabled)
     public byte Buttons { get; private set; }
     public byte? PeerVersion { get; private set; }
     public long Moves { get; private set; }
+    public long AbsoluteMoves { get; private set; }
     public long Clicks { get; private set; }
 
     public void Apply(PointerFrame frame)
@@ -46,6 +50,11 @@ internal sealed class PointerSession(IMouseOutput output, Func<bool> isEnabled)
             case PointerFrame.Move move when isEnabled():
                 output.MoveBy(move.Dx, move.Dy);
                 Moves++;
+                break;
+
+            case PointerFrame.Absolute absolute when isEnabled():
+                output.MoveNormalized(absolute.X, absolute.Y);
+                AbsoluteMoves++;
                 break;
 
             case PointerFrame.Buttons buttons:

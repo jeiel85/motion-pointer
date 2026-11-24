@@ -13,6 +13,8 @@ public class FrameDecoderTests
             0x02, 4, 0x05, 0x00, 0xFE, 0xFF, // MOVE dx=5, dy=-2
             0x03, 1, 0x03,              // BUTTONS left+right
             0x04, 1, 0xFF,              // WHEEL -1
+            0x05, 4, 0x00, 0x80, 0xFF, 0x7F, // ABSOLUTE 32768, 32767
+            0x06, 1, 1,                  // ABSOLUTE_MODE on
         ];
 
         var frames = new FrameDecoder().Push(data);
@@ -23,6 +25,8 @@ public class FrameDecoderTests
                 new PointerFrame.Move(5, -2),
                 new PointerFrame.Buttons(3),
                 new PointerFrame.Wheel(-1),
+                new PointerFrame.Absolute(32768, 32767),
+                new PointerFrame.AbsoluteMode(true),
             ],
             frames);
     }
@@ -49,12 +53,13 @@ public class FrameDecoderTests
     public void Wrong_length_for_known_type_is_a_protocol_error()
     {
         Assert.Throws<ProtocolException>(() => new FrameDecoder().Push([0x02, 2, 0, 0]));
+        Assert.Throws<ProtocolException>(() => new FrameDecoder().Push([0x05, 2, 0, 0]));
     }
 
     [Fact]
     public void Welcome_frame_matches_spec()
     {
-        Assert.Equal([0x81, 1, 1], PointerProtocol.Welcome());
+        Assert.Equal([0x81, 1, 2], PointerProtocol.Welcome());
     }
 }
 
@@ -63,6 +68,8 @@ internal sealed class RecordingMouse : IMouseOutput
     public List<string> Events { get; } = [];
 
     public void MoveBy(int dx, int dy) => Events.Add($"move {dx},{dy}");
+
+    public void MoveNormalized(ushort x, ushort y) => Events.Add($"absolute {x},{y}");
 
     public void SetButtons(byte previous, byte current) => Events.Add($"buttons {previous}->{current}");
 
@@ -86,6 +93,31 @@ public class PointerSessionTests
         Assert.Equal(["move 3,-4", "buttons 0->1", "buttons 1->0", "wheel 2"], mouse.Events);
         Assert.Equal((byte)1, session.PeerVersion);
         Assert.Equal(1, session.Clicks);
+    }
+
+    [Fact]
+    public void Applies_absolute_position() // 절대 좌표는 상대 이동과 섞이지 않는다
+    {
+        var mouse = new RecordingMouse();
+        var session = new PointerSession(mouse, () => true);
+
+        session.Apply(new PointerFrame.Absolute(0, 65535));
+        session.Apply(new PointerFrame.Absolute(32768, 100));
+
+        Assert.Equal(["absolute 0,65535", "absolute 32768,100"], mouse.Events);
+        Assert.Equal(2, session.AbsoluteMoves);
+        Assert.Equal(0, session.Moves);
+    }
+
+    [Fact]
+    public void Paused_session_ignores_absolute_position()
+    {
+        var mouse = new RecordingMouse();
+        var session = new PointerSession(mouse, () => false);
+
+        session.Apply(new PointerFrame.Absolute(100, 200));
+
+        Assert.Empty(mouse.Events);
     }
 
     [Fact]
@@ -143,6 +175,8 @@ internal sealed class SwitchableMouse : IMouseOutput
     public List<string> Delivered { get; } = [];
 
     public void MoveBy(int dx, int dy) { }
+
+    public void MoveNormalized(ushort x, ushort y) { }
 
     public void SetButtons(byte previous, byte current)
     {

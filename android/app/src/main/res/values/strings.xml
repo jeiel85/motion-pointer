@@ -19,6 +19,13 @@
     <string name="status_connected">연결됨</string>
     <string name="status_error">오류</string>
 
+    <string name="absolute_on">절대 포인팅 켜기</string>
+    <string name="absolute_off">절대 포인팅 끄기</string>
+    <string name="absolute_guide">마커를 찾는 중… PC 화면 네 모서리를 카메라에 비춰 주세요.</string>
+    <string name="absolute_lost">마커를 잃었습니다. PC 화면 전체가 보이도록 다시 비춰 주세요.</string>
+    <string name="absolute_need_pc">절대 포인팅은 PC 앱 모드에서만 쓸 수 있습니다.</string>
+    <string name="absolute_need_connection">먼저 PC에 연결하세요.</string>
+
     <string name="sensitivity_value">%1$.2f×</string>
     <string name="sens_min">0.35×</string>
     <string name="sens_mid">1×</string>

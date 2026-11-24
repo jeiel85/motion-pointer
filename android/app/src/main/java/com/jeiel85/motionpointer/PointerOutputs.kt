@@ -17,7 +17,7 @@ import kotlin.concurrent.thread
 
 sealed interface LinkState {
     data class Connecting(val message: String) : LinkState
-    data class Connected(val message: String) : LinkState
+    data class Connected(val message: String, val protocolVersion: Byte = 1) : LinkState
     data class Disconnected(val message: String) : LinkState
 }
 
@@ -27,6 +27,16 @@ interface PointerOutput {
 
     /** 현재 버튼 상태와 함께 이동량·휠을 보낸다. */
     fun send(dx: Int, dy: Int, buttons: Int, wheel: Int)
+
+    /** 절대 좌표 출력. 표준 HID 마우스는 상대 이동만 지원하므로 PC 앱 모드에서만 쓴다. */
+    fun sendAbsolute(x: Double, y: Double, buttons: Int, wheel: Int) {
+        throw UnsupportedOperationException("이 출력 방식은 절대 좌표를 지원하지 않습니다.")
+    }
+
+    /** PC의 마커 표시를 켜거나 끈다. */
+    fun setAbsoluteMode(enabled: Boolean) {
+        throw UnsupportedOperationException("이 출력 방식은 절대 포인팅을 지원하지 않습니다.")
+    }
 
     /** 버튼을 모두 뗀 뒤 연결을 닫는다. */
     fun close()
@@ -185,18 +195,40 @@ class PcLinkOutput(
                 read += n
             }
             if (type == PointerProtocol.TYPE_WELCOME && length == 1) {
-                onState(LinkState.Connected("${host.label()}의 PC 앱에 연결됨 (규약 v${payload[0]})"))
+                onState(LinkState.Connected("${host.label()}의 PC 앱에 연결됨 (규약 v${payload[0]})", payload[0]))
             }
         }
     }
 
     override fun send(dx: Int, dy: Int, buttons: Int, wheel: Int) {
-        val out = output ?: return
         val frames = ByteArrayOutputStream(16)
         if (dx != 0 || dy != 0) frames.write(PointerProtocol.move(dx, dy))
+        flush(frames, buttons, wheel)
+    }
+
+    override fun sendAbsolute(x: Double, y: Double, buttons: Int, wheel: Int) {
+        val frames = ByteArrayOutputStream(16)
+        frames.write(PointerProtocol.absolute(x, y))
+        flush(frames, buttons, wheel)
+    }
+
+    override fun setAbsoluteMode(enabled: Boolean) {
+        val out = output ?: return
+        try {
+            out.write(PointerProtocol.absoluteMode(enabled))
+        } catch (e: IOException) {
+            output = null
+            runCatching { socket?.close() }
+            if (!closed) onState(LinkState.Disconnected("PC 앱으로 보내지 못했습니다: ${e.message}"))
+        }
+    }
+
+    /** 절대·상대 프레임에 공통으로 붙는 버튼·휠 상태를 쓴다. 포인터 스레드에서만 호출한다. */
+    private fun flush(frames: ByteArrayOutputStream, buttons: Int, wheel: Int) {
         if (buttons != sentButtons) frames.write(PointerProtocol.buttons(buttons))
         if (wheel != 0) frames.write(PointerProtocol.wheel(wheel))
         if (frames.size() == 0) return
+        val out = output ?: return
         try {
             out.write(frames.toByteArray())
             sentButtons = buttons

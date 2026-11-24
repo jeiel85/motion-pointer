@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
 using MotionPointer.Bluetooth;
@@ -109,6 +110,7 @@ internal static class Program
         private int _enabled = 1;
         // 단축키 스레드(일시정지)와 연결 스레드가 함께 본다.
         private volatile PointerSession? _session;
+        private MarkerOverlay? _markers;
 
         private bool IsEnabled => Volatile.Read(ref _enabled) == 1;
 
@@ -118,6 +120,15 @@ internal static class Program
             if (hotkey.RegistrationError is { } hotkeyError)
             {
                 Console.WriteLine($"단축키 Ctrl+Alt+F9 등록 실패({hotkeyError}). 일시정지 없이 동작합니다.");
+            }
+
+            try
+            {
+                _markers = new MarkerOverlay();
+            }
+            catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
+            {
+                Log($"절대 포인팅 마커를 준비하지 못했습니다({ex.Message}). 상대 모드로 계속합니다.");
             }
 
             await using var server = await RfcommServer.StartAsync(HandleConnectionAsync, Log);
@@ -132,6 +143,8 @@ internal static class Program
             {
             }
 
+            _markers?.Dispose();
+            _markers = null;
             Console.WriteLine();
             Log("종료합니다.");
             return 0;
@@ -189,7 +202,18 @@ internal static class Program
                     {
                         try
                         {
-                            session.Apply(frame);
+                            if (frame is PointerFrame.AbsoluteMode mode)
+                            {
+                                _markers?.Show(mode.Enabled);
+                                Log(mode.Enabled
+                                    ? "절대 포인팅을 시작합니다. 폰 카메라로 모니터 네 모서리의 흰 마커를 비춰 주세요."
+                                    : "절대 포인팅을 종료합니다.");
+                            }
+                            else
+                            {
+                                session.Apply(frame);
+                            }
+
                             lastInputError = null;
                         }
                         catch (System.ComponentModel.Win32Exception ex)
@@ -209,7 +233,7 @@ internal static class Program
                         lastStatus = now;
                         var state = IsEnabled ? "● 동작" : "⏸ 정지";
                         var blocked = lastInputError is null ? "" : " | 입력 차단됨(관리자 권한 창?)";
-                        Console.Write($"\r{state} | {peer} | 이동 {session.Moves} | 클릭 {session.Clicks}{blocked}    ");
+                        Console.Write($"\r{state} | {peer} | 이동 {session.Moves} | 절대 {session.AbsoluteMoves} | 클릭 {session.Clicks}{blocked}    ");
                     }
                 }
             }
@@ -228,6 +252,7 @@ internal static class Program
             }
             finally
             {
+                _markers?.Show(false);
                 ReleaseButtons(session);
                 if (ReferenceEquals(_session, session))
                 {

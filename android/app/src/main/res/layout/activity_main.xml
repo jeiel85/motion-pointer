@@ -172,6 +172,20 @@
                 android:textSize="15sp"
                 android:textStyle="bold" />
 
+            <Button
+                android:id="@+id/absoluteMode"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_field_tappable"
+                android:letterSpacing="0.02"
+                android:stateListAnimator="@null"
+                android:text="@string/absolute_on"
+                android:textAllCaps="false"
+                android:textColor="@color/action_text"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
             <TextView
                 android:id="@+id/statusDetail"
                 android:layout_width="match_parent"

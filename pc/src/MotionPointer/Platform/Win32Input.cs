@@ -12,6 +12,8 @@ internal sealed class Win32MouseOutput : IMouseOutput
 {
     public void MoveBy(int dx, int dy) => Win32Mouse.MoveBy(dx, dy);
 
+    public void MoveNormalized(ushort x, ushort y) => Win32Mouse.MoveNormalized(x, y);
+
     public void SetButtons(byte previous, byte current) => Win32Mouse.SetButtons(previous, current);
 
     public void Wheel(int notches) => Win32Mouse.Wheel(notches);
@@ -36,6 +38,8 @@ internal static class Win32Mouse
     private const int SmYVirtualScreen = 77;
     private const int SmCxVirtualScreen = 78;
     private const int SmCyVirtualScreen = 79;
+    private const int SmCxScreen = 0;
+    private const int SmCyScreen = 1;
 
     private static readonly (byte Bit, uint Down, uint Up)[] ButtonFlags =
     [
@@ -61,9 +65,28 @@ internal static class Win32Mouse
         var width = Math.Max(GetSystemMetrics(SmCxVirtualScreen), 2);
         var height = Math.Max(GetSystemMetrics(SmCyVirtualScreen), 2);
 
-        var x = Math.Clamp(position.X + dx, left, left + width - 1);
-        var y = Math.Clamp(position.Y + dy, top, top + height - 1);
+        SendAbsolute(
+            left, top, width, height,
+            Math.Clamp(position.X + dx, left, left + width - 1),
+            Math.Clamp(position.Y + dy, top, top + height - 1));
+    }
 
+    /// <summary>정규화 좌표를 주 모니터의 가상 화면 픽셀로 옮긴다.</summary>
+    public static void MoveNormalized(ushort x, ushort y)
+    {
+        var left = GetSystemMetrics(SmXVirtualScreen);
+        var top = GetSystemMetrics(SmYVirtualScreen);
+        var width = Math.Max(GetSystemMetrics(SmCxScreen), 2);
+        var height = Math.Max(GetSystemMetrics(SmCyScreen), 2);
+
+        SendAbsolute(
+            left, top, width, height,
+            left + (int)Math.Round(x / 65535.0 * (width - 1)),
+            top + (int)Math.Round(y / 65535.0 * (height - 1)));
+    }
+
+    private static void SendAbsolute(int left, int top, int width, int height, int x, int y)
+    {
         var input = new Input
         {
             Type = InputMouse,
